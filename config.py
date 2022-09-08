@@ -2,7 +2,7 @@ params = dict()
 
 params['num_classes'] = 10
 
-params['dataset'] = 'C:/Users/TungNQ/PycharmProjects/Slowfast/dataset/'
+params['dataset'] = 'dataset/'
 
 params['epoch_num'] = 40
 params['batch_size'] = 16

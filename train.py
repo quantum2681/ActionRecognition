@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 import torch.backends.cudnn as cudnn
 from dataset import VideoDataset
 import slowfast
-# from tensorboardX import SummaryWriter
+from tensorboardX import SummaryWriter
 
 
 class AverageMeter(object):
@@ -146,7 +146,7 @@ def main():
     if not os.path.exists(logdir):
         os.makedirs(logdir)
 
-    # writer = SummaryWriter(log_dir=logdir)
+    writer = SummaryWriter(log_dir=logdir)
 
     print("Loading dataset")
     train_dataloader = \
@@ -187,17 +187,17 @@ def main():
     if not os.path.exists(model_save_dir):
         os.makedirs(model_save_dir)
     for epoch in range(params['epoch_num']):
-        # train(model, train_dataloader, epoch, criterion, optimizer, writer)
-        # if epoch % 2 == 0:
-            # validation(model, val_dataloader, epoch, criterion, optimizer, writer)
-        # scheduler.step()
+        train(model, train_dataloader, epoch, criterion, optimizer, writer)
+        if epoch % 2 == 0:
+            validation(model, val_dataloader, epoch, criterion, optimizer, writer)
+        scheduler.step()
         if epoch % 1 == 0:
             checkpoint = os.path.join(model_save_dir,
                                       "clip_len_" + str(params['clip_len']) + "frame_sample_rate_" + str(
                                           params['frame_sample_rate']) + "_checkpoint_" + str(epoch) + ".pth.tar")
             torch.save(model.module.state_dict(), checkpoint)
 
-    # writer.close
+    writer.close
 
 
 if __name__ == '__main__':
