@@ -4,10 +4,10 @@ params['num_classes'] = 10
 
 params['dataset'] = 'dataset/'
 
-params['epoch_num'] = 40
-params['batch_size'] = 16
+params['epoch_num'] = 5
+params['batch_size'] = 8
 params['step'] = 10
-params['num_workers'] = 4
+params['num_workers'] = 2
 params['learning_rate'] = 1e-2
 params['momentum'] = 0.9
 params['weight_decay'] = 1e-5
@@ -15,6 +15,6 @@ params['display'] = 10
 params['pretrained'] = None
 params['gpu'] = [0]
 params['log'] = 'log'
-params['save_path'] = 'UCF101'
+params['save_path'] = 'checkpoint'
 params['clip_len'] = 64
 params['frame_sample_rate'] = 1
