@@ -90,9 +90,9 @@ def train(model, train_loader, val_loader,  epoch, criterion, scheduler, optimiz
 
             step += 1
 
-            print("train loss", tot_train_loss / tot_train_count)
-            print("train accu", correct / tot_train_count)
-            print()
+        print("train loss", tot_train_loss / tot_train_count)
+        print("train accu", correct / tot_train_count)
+        print()
 
 
 def main():
