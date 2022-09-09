@@ -9,134 +9,89 @@ import torch.backends.cudnn as cudnn
 from dataset import VideoDataset
 import slowfast
 from tensorboardX import SummaryWriter
+from utils import evaluate
 
 
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
+def total_right(output, target):
+    pred = output.argmax(dim=1)
+    return sum(pred == target)
 
 
-def accuracy(output, target, topk=(1,)):
-    """Computes the precision@k for the specified values of k"""
-    maxk = max(topk)
-    batch_size = target.size(0)
+def train_batch(model, data_loader, optimizer, scheduler, criterion):
+    model.train()
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    input, target = [d.to(device) for d in data_loader]
+    target = target.type(torch.LongTensor).to(device)
+    output = model(input)
 
-    _, pred = output.topk(maxk, 1, True, True)
-    pred = pred.t()
-    correct = pred.eq(target.reshape(1, -1).expand_as(pred))
+    batch_size = input.size(0)
+    pred = output.argmax(dim=1)
 
-    res = []
-    for k in topk:
-        correct_k = correct[:k].reshape(-1).float().sum(0)
-        res.append(correct_k.mul_(100.0 / batch_size))
-    return res
+    right_predict = total_right(output, target)
+    loss = criterion(output, target)
+
+    optimizer.zero_grad()
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
+    optimizer.step()
+    scheduler.step()
+    return loss.item(), right_predict.item()
 
 
-def train(model, train_dataloader, epoch, criterion, optimizer, writer):
-    batch_time = AverageMeter()
-    data_time = AverageMeter()
-    losses = AverageMeter()
-    top1 = AverageMeter()
-    top5 = AverageMeter()
-
+def train(model, train_loader, val_loader,  epoch, criterion, scheduler, optimizer, writer, load_checkpoint):
+    # switch to train mode
     model.train()
     end = time.time()
-    for step, (inputs, labels) in enumerate(train_dataloader):
-        data_time.update(time.time() - end)
 
-        inputs = inputs.cuda()
-        labels = labels.cuda()
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
+    # load checkpoint config
+    step = load_checkpoint['step']
+    best_acc = load_checkpoint['best_acc']
+    current_epoch = load_checkpoint['epoch'] + 1
 
-        # measure accuracy and record loss
-        prec1, prec5 = accuracy(outputs.data, labels, topk=(1, 5))
-        losses.update(loss.item(), inputs.size(0))
-        top1.update(prec1.item(), inputs.size(0))
-        top5.update(prec5.item(), inputs.size(0))
+    for epoch in range(current_epoch, current_epoch + epoch):
+        print(f'epoch: {epoch}')
+        tot_train_loss = 0
+        tot_train_count = 0
+        correct = 0
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        batch_time.update(time.time() - end)
-        end = time.time()
-        if (step + 1) % params['display'] == 0:
-            print('-------------------------------------------------------')
-            for param in optimizer.param_groups:
-                print('lr: ', param['lr'])
-            print_string = 'Epoch: [{0}][{1}/{2}]'.format(epoch, step + 1, len(train_dataloader))
-            print(print_string)
-            print_string = 'data_time: {data_time:.3f}, batch time: {batch_time:.3f}'.format(
-                data_time=data_time.val,
-                batch_time=batch_time.val)
-            print(print_string)
-            print_string = 'loss: {loss:.5f}'.format(loss=losses.avg)
-            print(print_string)
-            print_string = 'Top-1 accuracy: {top1_acc:.2f}%, Top-5 accuracy: {top5_acc:.2f}%'.format(
-                top1_acc=top1.avg,
-                top5_acc=top5.avg)
-            print(print_string)
-    writer.add_scalar('train_loss_epoch', losses.avg, epoch)
-    writer.add_scalar('train_top1_acc_epoch', top1.avg, epoch)
-    writer.add_scalar('train_top5_acc_epoch', top5.avg, epoch)
+        for train_data in train_loader:
+            loss, right_predict = train_batch(model, train_data, optimizer, scheduler, criterion)
+            train_size = train_data[0].size(0)
 
+            # update config
+            tot_train_loss += loss
+            correct += right_predict
+            tot_train_count += train_size
 
-def validation(model, val_dataloader, epoch, criterion, optimizer, writer):
-    batch_time = AverageMeter()
-    data_time = AverageMeter()
-    losses = AverageMeter()
-    top1 = AverageMeter()
-    top5 = AverageMeter()
-    model.eval()
+            if step % params['display'] == 0:
+                print(f'train_batch_loss[{step}]: ', loss / train_size, "correct", right_predict / train_size)
+                writer.add_scalar('training loss', loss / train_size, step // params['display'])
+                writer.add_scalar('training acc', right_predict / train_size, step // params['display'])
 
-    end = time.time()
-    with torch.no_grad():
-        for step, (inputs, labels) in enumerate(val_dataloader):
-            data_time.update(time.time() - end)
-            inputs = inputs.cuda()
-            labels = labels.cuda()
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
+            if step % params['validate'] == 0:
+                evaluation = evaluate(model, val_loader, criterion)
+                val_loss, val_acc = evaluation['loss'], evaluation['acc']
+                print(f'valid_evaluation: loss {val_loss}, acc {val_acc}')
+                if val_acc > best_acc:
+                    best_acc = val_acc
+                    save_model_path = f'checkpoint/checkpoint_{epoch}.pt'
+                    torch.save({
+                        'best_acc': best_acc,
+                        'epoch': epoch,
+                        'step': step,
+                        'state_dict': model.state_dict()},
+                        save_model_path
+                    )
+                    print('best_acc', best_acc)
+                    print('save model at', save_model_path)
+                writer.add_scalar('valid loss', val_loss, step // params['validate'])
+                writer.add_scalar('valid acc', val_acc, step // params['validate'])
 
-            # measure accuracy and record loss
+            step += 1
 
-            prec1, prec5 = accuracy(outputs.data, labels, topk=(1, 5))
-            losses.update(loss.item(), inputs.size(0))
-            top1.update(prec1.item(), inputs.size(0))
-            top5.update(prec5.item(), inputs.size(0))
-            batch_time.update(time.time() - end)
-            end = time.time()
-            if (step + 1) % params['display'] == 0:
-                print('----validation----')
-                print_string = 'Epoch: [{0}][{1}/{2}]'.format(epoch, step + 1, len(val_dataloader))
-                print(print_string)
-                print_string = 'data_time: {data_time:.3f}, batch time: {batch_time:.3f}'.format(
-                    data_time=data_time.val,
-                    batch_time=batch_time.val)
-                print(print_string)
-                print_string = 'loss: {loss:.5f}'.format(loss=losses.avg)
-                print(print_string)
-                print_string = 'Top-1 accuracy: {top1_acc:.2f}%, Top-5 accuracy: {top5_acc:.2f}%'.format(
-                    top1_acc=top1.avg,
-                    top5_acc=top5.avg)
-                print(print_string)
-    writer.add_scalar('val_loss_epoch', losses.avg, epoch)
-    writer.add_scalar('val_top1_acc_epoch', top1.avg, epoch)
-    writer.add_scalar('val_top5_acc_epoch', top5.avg, epoch)
+            print("train loss", tot_train_loss / tot_train_count)
+            print("train accu", correct / tot_train_count)
+            print()
 
 
 def main():
@@ -149,23 +104,21 @@ def main():
     writer = SummaryWriter(log_dir=logdir)
 
     print("Loading dataset")
-    train_dataloader = \
-        DataLoader(
-            VideoDataset(params['dataset'], mode='train', clip_len=params['clip_len'],
-                         frame_sample_rate=params['frame_sample_rate']),
-            batch_size=params['batch_size'], shuffle=True, num_workers=params['num_workers'])
+    train_loader = DataLoader(VideoDataset(params['dataset'], mode='train', clip_len=params['clip_len'],
+                                               frame_sample_rate=params['frame_sample_rate']),
+                                  batch_size=params['batch_size'], shuffle=True, num_workers=params['num_workers'])
 
-    val_dataloader = \
-        DataLoader(
-            VideoDataset(params['dataset'], mode='validation', clip_len=params['clip_len'],
-                         frame_sample_rate=params['frame_sample_rate']),
-            batch_size=params['batch_size'], shuffle=False, num_workers=params['num_workers'])
+    val_loader = DataLoader(VideoDataset(params['dataset'], mode='validation', clip_len=params['clip_len'],
+                                             frame_sample_rate=params['frame_sample_rate']),
+                                batch_size=params['batch_size'], shuffle=False, num_workers=params['num_workers'])
 
     print("load model")
     model = slowfast.resnet50(class_num=params['num_classes'])
 
-    if params['pretrained'] is not None:
-        pretrained_dict = torch.load(params['pretrained'], map_location='cpu')
+    if params['checkpoint'] is not None:
+        load_checkpoint = torch.load(params['checkpoint'])
+        pretrained_dict = load_checkpoint['state_dict']
+
         try:
             model_dict = model.module.state_dict()
         except AttributeError:
@@ -175,27 +128,17 @@ def main():
         model_dict.update(pretrained_dict)
         model.load_state_dict(model_dict)
 
+
     model = model.cuda(params['gpu'][0])
     model = nn.DataParallel(model, device_ids=params['gpu'])  # multi-Gpu
 
     criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = optim.SGD(model.parameters(), lr=params['learning_rate'], momentum=params['momentum'],
-                          weight_decay=params['weight_decay'])
+    optimizer = optim.Adam(model.parameters(), lr=params['learning_rate'], betas=params['betas'],
+                           weight_decay=params['weight_decay'])
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=params['step'], gamma=0.1)
 
-    model_save_dir = os.path.join(params['save_path'], cur_time)
-    if not os.path.exists(model_save_dir):
-        os.makedirs(model_save_dir)
-    for epoch in range(params['epoch_num']):
-        train(model, train_dataloader, epoch, criterion, optimizer, writer)
-        if epoch % 2 == 0:
-            validation(model, val_dataloader, epoch, criterion, optimizer, writer)
-        scheduler.step()
-        if epoch % 1 == 0:
-            checkpoint = os.path.join(model_save_dir,
-                                      "clip_len_" + str(params['clip_len']) + "frame_sample_rate_" + str(
-                                          params['frame_sample_rate']) + "_checkpoint_" + str(epoch) + ".pth.tar")
-            torch.save(model.module.state_dict(), checkpoint)
+    epochs = params['epoch_num']
+    train(model, train_loader, val_loader, epochs, criterion, scheduler, optimizer, writer, load_checkpoint)
 
     writer.close
 

@@ -210,8 +210,11 @@ def resnet200(**kwargs):
 
 
 if __name__ == "__main__":
+    from torchinfo import summary
     num_classes = 10
     input_tensor = torch.autograd.Variable(torch.rand(2, 3, 8, 112, 112))
     model = resnet50(class_num=num_classes)
-    output = model(input_tensor)
-    print(output.size())
+    # output = model(input_tensor)
+    # print(output.size())
+
+    summary(model, (2, 3, 8, 112, 112))
