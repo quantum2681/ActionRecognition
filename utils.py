@@ -16,7 +16,6 @@ def evaluate(model, val_loader, criterion):
             output = model(input)
             batch_size = input.size(0)
 
-            print(output, target)
 
             loss = criterion(output, target)
 

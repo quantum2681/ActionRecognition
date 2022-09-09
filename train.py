@@ -48,6 +48,7 @@ def train(model, train_loader, val_loader,  epoch, criterion, scheduler, optimiz
     best_acc = load_checkpoint['best_acc']
     current_epoch = load_checkpoint['epoch'] + 1
 
+
     for epoch in range(current_epoch, current_epoch + epoch):
         print(f'epoch: {epoch}')
         tot_train_loss = 0

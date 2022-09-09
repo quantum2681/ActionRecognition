@@ -4,8 +4,9 @@ params['num_classes'] = 3
 
 params['dataset'] = 'dataset/'
 
-params['epoch_num'] = 1
+params['epoch_num'] = 5
 params['batch_size'] = 8
+
 params['step'] = 10
 params['num_workers'] = 2
 params['learning_rate'] = 1e-3
