@@ -6,7 +6,7 @@ from config import params
 from torch import nn, optim
 from torch.utils.data import DataLoader
 import torch.backends.cudnn as cudnn
-from dataset import VideoDataset
+from dataset import VideoDataset, FastDataset
 import slowfast
 from tensorboardX import SummaryWriter
 from utils import evaluate
@@ -38,7 +38,7 @@ def train_batch(model, data_loader, optimizer, scheduler, criterion):
     return loss.item(), right_predict.item()
 
 
-def train(model, train_loader, val_loader,  epoch, criterion, scheduler, optimizer, writer, load_checkpoint):
+def train(model, train_loader, val_loader, epoch, criterion, scheduler, optimizer, writer, load_checkpoint):
     # switch to train mode
     model.train()
     end = time.time()
@@ -47,7 +47,6 @@ def train(model, train_loader, val_loader,  epoch, criterion, scheduler, optimiz
     step = load_checkpoint['step']
     best_acc = load_checkpoint['best_acc']
     current_epoch = load_checkpoint['epoch'] + 1
-
 
     for epoch in range(current_epoch, current_epoch + epoch):
         print(f'epoch: {epoch}')
@@ -105,13 +104,20 @@ def main():
     writer = SummaryWriter(log_dir=logdir)
 
     print("Loading dataset")
-    train_loader = DataLoader(VideoDataset(params['dataset'], mode='train', clip_len=params['clip_len'],
-                                               frame_sample_rate=params['frame_sample_rate']),
-                                  batch_size=params['batch_size'], shuffle=True, num_workers=params['num_workers'])
 
-    val_loader = DataLoader(VideoDataset(params['dataset'], mode='validation', clip_len=params['clip_len'],
-                                             frame_sample_rate=params['frame_sample_rate']),
-                                batch_size=params['batch_size'], shuffle=False, num_workers=params['num_workers'])
+    # train_dataset = FastDataset('checkpoint/train_dataset.pt')
+    val_dataset = FastDataset('checkpoint/val_dataset.pt')
+
+    train_dataset = VideoDataset(params['dataset'], mode='train', clip_len=params['clip_len'],
+                                 frame_sample_rate=params['frame_sample_rate'])
+    # val_dataset = VideoDataset(params['dataset'], mode='validation', clip_len=params['clip_len'],
+    #                                          frame_sample_rate=params['frame_sample_rate'])
+
+    train_loader = DataLoader(train_dataset, batch_size=params['batch_size'], shuffle=True,
+                              num_workers=params['num_workers'])
+
+    val_loader = DataLoader(val_dataset, batch_size=params['batch_size'], shuffle=True,
+                            num_workers=params['num_workers'])
 
     print("load model")
     model = slowfast.resnet50(class_num=params['num_classes'])
@@ -128,7 +134,6 @@ def main():
         print("load pretrain model")
         model_dict.update(pretrained_dict)
         model.load_state_dict(model_dict)
-
 
     model = model.cuda(params['gpu'][0])
     model = nn.DataParallel(model, device_ids=params['gpu'])  # multi-Gpu

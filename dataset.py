@@ -4,6 +4,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
+import torch
 
 
 class VideoDataset(Dataset):
@@ -27,7 +28,6 @@ class VideoDataset(Dataset):
         # convert the list of label names into an array of label indices
         self.label_array = np.array([self.label2index[label] for label in labels], dtype=int)
 
-
     def __getitem__(self, index):
         # loading and preprocessing. TODO move them to transform classes
         buffer = self.loadvideo(self.fnames[index])
@@ -49,7 +49,6 @@ class VideoDataset(Dataset):
         # D = Depth (in this case, time), H = Height, W = Width, C = Channels
         return buffer.transpose((3, 0, 1, 2))
 
-
     def loadvideo(self, fname):
         remainder = np.random.randint(self.frame_sample_rate)
         # initialize a VideoCapture object to read video data into a numpy array
@@ -57,8 +56,6 @@ class VideoDataset(Dataset):
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         frame_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-
 
         if frame_height < frame_width:
             resize_height = np.random.randint(self.short_side[0], self.short_side[1] + 1)
@@ -137,15 +134,27 @@ class VideoDataset(Dataset):
         return len(self.fnames)
 
 
+class FastDataset:
+    def __init__(self, path):
+        self.data = torch.load(path)
+        self.input_ = self.data['input']
+        self.target = self.data['target']
+
+    def __len__(self):
+        return len(self.target)
+
+    def __getitem__(self, idx):
+        return self.input_[idx], self.target[idx]
+
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import torchvision
+
     datapath = 'dataset/'
     dataset = VideoDataset(datapath, mode='train')
     from transforms import GroupScale, GroupRandomCrop, Stack, ToTorchFormatTensor, GroupNormalize, GroupMultiScaleCrop, \
         GroupRandomHorizontalFlip
-
 
     for x, y in dataset:
         print(x.shape)
