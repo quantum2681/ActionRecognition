@@ -12,8 +12,8 @@ class VideoDataset(Dataset):
         folder = Path(directory) / mode
         self.clip_len = clip_len
 
-        self.short_side = [256, 320]
-        self.crop_size = 224
+        self.short_side = [128, 160]
+        self.crop_size = 112
         self.frame_sample_rate = frame_sample_rate
         self.mode = mode
 

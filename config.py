@@ -1,6 +1,6 @@
 params = dict()
 
-params['num_classes'] = 3
+params['num_classes'] = 10
 
 params['dataset'] = 'dataset/'
 
