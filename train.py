@@ -106,12 +106,12 @@ def main():
     print("Loading dataset")
 
     # train_dataset = FastDataset('checkpoint/train_dataset.pt')
-    val_dataset = FastDataset('checkpoint/val_dataset.pt')
+    # val_dataset = FastDataset('checkpoint/val_dataset.pt')
 
     train_dataset = VideoDataset(params['dataset'], mode='train', clip_len=params['clip_len'],
                                  frame_sample_rate=params['frame_sample_rate'])
-    # val_dataset = VideoDataset(params['dataset'], mode='validation', clip_len=params['clip_len'],
-    #                                          frame_sample_rate=params['frame_sample_rate'])
+    val_dataset = VideoDataset(params['dataset'], mode='validation', clip_len=params['clip_len'],
+                                             frame_sample_rate=params['frame_sample_rate'])
 
     train_loader = DataLoader(train_dataset, batch_size=params['batch_size'], shuffle=True,
                               num_workers=params['num_workers'])

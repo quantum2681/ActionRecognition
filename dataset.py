@@ -23,18 +23,21 @@ class VideoDataset(Dataset):
             for fname in os.listdir(os.path.join(folder, label)):
                 self.fnames.append(os.path.join(folder, label, fname))
                 labels.append(label)
+
+
         # prepare a mapping between the label names (strings) and indices (ints)
         self.label2index = {label: index for index, label in enumerate(sorted(set(labels)))}
         # convert the list of label names into an array of label indices
         self.label_array = np.array([self.label2index[label] for label in labels], dtype=int)
+
 
     def __getitem__(self, index):
         # loading and preprocessing. TODO move them to transform classes
         buffer = self.loadvideo(self.fnames[index])
 
         while buffer.shape[0] < self.clip_len + 2:
-            index = np.random.randint(self.__len__())
-            buffer = self.loadvideo(self.fnames[index])
+            i = np.random.randint(self.__len__())
+            buffer = self.loadvideo(self.fnames[i])
 
         if self.mode == 'train' or self.mode == 'train':
             buffer = self.randomflip(buffer)
@@ -148,19 +151,18 @@ class FastDataset:
 
 
 if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    import torchvision
+    import numpy as np
+    from config import params
 
-    datapath = 'dataset/'
-    dataset = VideoDataset(datapath, mode='train')
-    from transforms import GroupScale, GroupRandomCrop, Stack, ToTorchFormatTensor, GroupNormalize, GroupMultiScaleCrop, \
-        GroupRandomHorizontalFlip
+    train_dataset = VideoDataset(params['dataset'], mode='train', clip_len=params['clip_len'],
+                                 frame_sample_rate=params['frame_sample_rate'])
+    list_y = []
+    for x, y in train_dataset:
+        list_y.append(y)
 
-    for x, y in dataset:
-        print(x.shape)
-        print(y)
-        break
-
+    unique, counts = np.unique(list_y, return_counts=True)
+    freq = dict(zip(unique, counts))
+    print(freq)
 
 
 
