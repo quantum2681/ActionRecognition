@@ -17,10 +17,15 @@ def evaluate(model, val_loader, criterion):
             batch_size = input.size(0)
 
 
+
+
             loss = criterion(output, target)
 
             preds = output.argmax(dim=1)
             correct = sum(preds == target)
+
+            # print(output)
+            print(preds, target, sep='\t')
 
             tot_count += batch_size
             tot_loss += loss.item()

@@ -34,7 +34,6 @@ def train_batch(model, data_loader, optimizer, scheduler, criterion):
     loss.backward()
     torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
     optimizer.step()
-    scheduler.step()
     return loss.item(), right_predict.item()
 
 
@@ -54,6 +53,8 @@ def train(model, train_loader, val_loader, epoch, criterion, scheduler, optimize
         tot_train_count = 0
         correct = 0
 
+        print(f"current learning rate {scheduler.get_last_lr()[0]}")
+
         for train_data in train_loader:
             loss, right_predict = train_batch(model, train_data, optimizer, scheduler, criterion)
             train_size = train_data[0].size(0)
@@ -64,14 +65,14 @@ def train(model, train_loader, val_loader, epoch, criterion, scheduler, optimize
             tot_train_count += train_size
 
             if step % params['display'] == 0:
-                print(f'train_batch_loss[{step}]: ', loss / train_size, "correct", right_predict / train_size)
+                print(f'train_batch_loss[{step}]: ', round(loss / train_size, 3), "correct", right_predict / train_size)
                 writer.add_scalar('training loss', loss / train_size, step // params['display'])
                 writer.add_scalar('training acc', right_predict / train_size, step // params['display'])
 
             if step % params['validate'] == 0:
                 evaluation = evaluate(model, val_loader, criterion)
                 val_loss, val_acc = evaluation['loss'], evaluation['acc']
-                print(f'valid_evaluation: loss {val_loss}, acc {val_acc}')
+                print(f'valid_evaluation: loss {val_loss:.3f}, acc {val_acc:.3f}')
                 if val_acc > best_acc:
                     best_acc = val_acc
                     save_model_path = f'checkpoint/checkpoint_{epoch}.pt'
@@ -79,6 +80,7 @@ def train(model, train_loader, val_loader, epoch, criterion, scheduler, optimize
                         'best_acc': best_acc,
                         'epoch': epoch,
                         'step': step,
+                        'learning_rate': scheduler.get_last_lr()[0],
                         'state_dict': model.state_dict()},
                         save_model_path
                     )
@@ -87,10 +89,12 @@ def train(model, train_loader, val_loader, epoch, criterion, scheduler, optimize
                 writer.add_scalar('valid loss', val_loss, step // params['validate'])
                 writer.add_scalar('valid acc', val_acc, step // params['validate'])
 
+
+            scheduler.step()
             step += 1
 
-        print("train loss", tot_train_loss / tot_train_count)
-        print("train accu", correct / tot_train_count)
+        print("train loss", round(tot_train_loss / tot_train_count, 3))
+        print("train accu", round(correct / tot_train_count, 3))
         print()
 
 
@@ -138,12 +142,28 @@ def main():
     model = model.cuda(params['gpu'][0])
     model = nn.DataParallel(model, device_ids=params['gpu'])  # multi-Gpu
 
+
+    learning_rate = load_checkpoint['learning_rate']
+    learning_rate = params['learning_rate']
+
     criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = optim.Adam(model.parameters(), lr=params['learning_rate'], betas=params['betas'],
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, betas=params['betas'],
                            weight_decay=params['weight_decay'])
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=params['step'], gamma=0.1)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, gamma=0.9, step_size=params['step'])
+
 
     epochs = params['epoch_num']
+
+    # save_model_path = f'checkpoint/checkpoint_{0}_.pt'
+    # torch.save({
+    #     'best_acc': 0,
+    #     'epoch': 0,
+    #     'step': 0,
+    #     'learning_rate': params['learning_rate'],
+    #     'state_dict': model.state_dict()},
+    #     save_model_path
+    # )
+
     train(model, train_loader, val_loader, epochs, criterion, scheduler, optimizer, writer, load_checkpoint)
 
     writer.close
