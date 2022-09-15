@@ -10,11 +10,11 @@ def evaluate(model, val_loader, criterion):
 
     with torch.no_grad():
         for i, (data) in enumerate(val_loader):
-            input, target = [d.to(device) for d in data]
-            target = target.type(torch.LongTensor).to(device)
+            input = [d.to(device) for d in data[0]]
+            target = data[1].type(torch.LongTensor).to(device)
 
             output = model(input)
-            batch_size = input.size(0)
+            batch_size = input[0].size(0)
 
 
 

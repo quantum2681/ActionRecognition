@@ -13,8 +13,8 @@ class VideoDataset(Dataset):
         folder = Path(directory) / mode
         self.clip_len = clip_len
 
-        self.short_side = [128, 160]
-        self.crop_size = 112
+        self.short_side = [256, 320]
+        self.crop_size = 224
         self.frame_sample_rate = frame_sample_rate
         self.mode = mode
 
@@ -45,7 +45,7 @@ class VideoDataset(Dataset):
         buffer = self.normalize(buffer)
         buffer = self.to_tensor(buffer)
 
-        return buffer, self.label_array[index]
+        return [buffer[:, ::4, :, :], buffer], self.label_array[index]
 
     def to_tensor(self, buffer):
         # convert from [D, H, W, C] format to [C, D, H, W] (what PyTorch uses)

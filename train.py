@@ -20,19 +20,21 @@ def total_right(output, target):
 def train_batch(model, data_loader, optimizer, scheduler, criterion):
     model.train()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    input, target = [d.to(device) for d in data_loader]
-    target = target.type(torch.LongTensor).to(device)
+    input = [d.to(device) for d in data_loader[0]]
+    target = data_loader[1].type(torch.LongTensor).to(device)
     output = model(input)
 
-    batch_size = input.size(0)
+    batch_size = input[0].size(0)
     pred = output.argmax(dim=1)
+
+    # print(pred, target)
 
     right_predict = total_right(output, target)
     loss = criterion(output, target)
 
     optimizer.zero_grad()
     loss.backward()
-    torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
+    torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
     optimizer.step()
     return loss.item(), right_predict.item()
 
@@ -57,7 +59,7 @@ def train(model, train_loader, val_loader, epoch, criterion, scheduler, optimize
 
         for train_data in train_loader:
             loss, right_predict = train_batch(model, train_data, optimizer, scheduler, criterion)
-            train_size = train_data[0].size(0)
+            train_size = train_data[0][0].size(0)
 
             # update config
             tot_train_loss += loss
@@ -124,49 +126,47 @@ def main():
                             num_workers=params['num_workers'])
 
     print("load model")
-    model = slowfast.resnet50(class_num=params['num_classes'])
+    model = slowfast.resnet50
 
     if params['checkpoint'] is not None:
         load_checkpoint = torch.load(params['checkpoint'])
         pretrained_dict = load_checkpoint['state_dict']
-
-        try:
-            model_dict = model.module.state_dict()
-        except AttributeError:
-            model_dict = model.state_dict()
-        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
-        print("load pretrain model")
-        model_dict.update(pretrained_dict)
-        model.load_state_dict(model_dict)
+        model.load_state_dict(pretrained_dict)
 
     model = model.cuda(params['gpu'][0])
-    model = nn.DataParallel(model, device_ids=params['gpu'])  # multi-Gpu
+    # model = nn.DataParallel(model, device_ids=params['gpu'])  # multi-Gpu
 
 
-    learning_rate = load_checkpoint['learning_rate']
-    learning_rate = params['learning_rate']
+    if load_checkpoint['learning_rate'] is None:
+        learning_rate = params['learning_rate']
+    else:
+        learning_rate = load_checkpoint['learning_rate']
+
+
 
     criterion = nn.CrossEntropyLoss().cuda()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, betas=params['betas'],
                            weight_decay=params['weight_decay'])
-    scheduler = optim.lr_scheduler.StepLR(optimizer, gamma=0.9, step_size=params['step'])
+    scheduler = optim.lr_scheduler.StepLR(optimizer, gamma=1, step_size=params['step'])
 
 
     epochs = params['epoch_num']
 
-    # save_model_path = f'checkpoint/checkpoint_{0}_.pt'
-    # torch.save({
-    #     'best_acc': 0,
-    #     'epoch': 0,
-    #     'step': 0,
-    #     'learning_rate': params['learning_rate'],
-    #     'state_dict': model.state_dict()},
-    #     save_model_path
-    # )
+
+    save_model_path = f'checkpoint/checkpoint_{0}_.pt'
+    torch.save({
+        'best_acc': 0,
+        'epoch': 0,
+        'step': 0,
+        'learning_rate': params['learning_rate'],
+        'state_dict': model.state_dict()},
+        save_model_path
+    )
+
 
     train(model, train_loader, val_loader, epochs, criterion, scheduler, optimizer, writer, load_checkpoint)
 
-    writer.close
+    # writer.close
 
 
 if __name__ == '__main__':
