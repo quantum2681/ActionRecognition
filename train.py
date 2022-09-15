@@ -153,15 +153,15 @@ def main():
     epochs = params['epoch_num']
 
 
-    save_model_path = f'checkpoint/checkpoint_{0}_.pt'
-    torch.save({
-        'best_acc': 0,
-        'epoch': 0,
-        'step': 0,
-        'learning_rate': params['learning_rate'],
-        'state_dict': model.state_dict()},
-        save_model_path
-    )
+    # save_model_path = f'ActionRecognition/checkpoint/checkpoint_{0}_.pt'
+    # torch.save({
+    #     'best_acc': 0,
+    #     'epoch': 0,
+    #     'step': 0,
+    #     'learning_rate': params['learning_rate'],
+    #     'state_dict': model.state_dict()},
+    #     save_model_path
+    # )
 
 
     train(model, train_loader, val_loader, epochs, criterion, scheduler, optimizer, writer, load_checkpoint)

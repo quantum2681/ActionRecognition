@@ -8,6 +8,8 @@ def evaluate(model, val_loader, criterion):
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+    max_o = -1e3
+    min_o = 1e3
     with torch.no_grad():
         for i, (data) in enumerate(val_loader):
             input = [d.to(device) for d in data[0]]
@@ -25,11 +27,18 @@ def evaluate(model, val_loader, criterion):
             correct = sum(preds == target)
 
             # print(output)
-            print(preds, target, sep='\t')
+            # print(preds, target, sep='\t')
+
+            if torch.max(output) > max_o:
+                max_o = torch.max(output)
+            if torch.min(output) < min_o:
+                min_o = torch.min(output)
 
             tot_count += batch_size
             tot_loss += loss.item()
             tot_correct += correct
+
+    print(f'max {max_o:.3f}, min {min_o:3f}, ', end='\t')
 
     evaluation = {
         'loss': tot_loss / tot_count,
